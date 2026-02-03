@@ -1,6 +1,6 @@
 package com.timedead.relojinverso.data
 
-import com.timedead.relojinverso.CountryLifeExpectancy
+import com.timedead.relojinverso.domain.model.CountryLifeExpectancy
 import java.time.LocalDate
 
 data class UserPrefsData(
