@@ -2,101 +2,136 @@ package com.timedead.relojinverso.data.repository
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
+import com.google.firebase.auth.FirebaseAuthUserCollisionException
+import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.timedead.relojinverso.domain.model.User
 import com.timedead.relojinverso.domain.repository.AuthRepository
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import java.time.LocalDate
+import kotlinx.coroutines.tasks.await
 import java.util.UUID
 
 /**
- * Implementación Mock del repositorio de autenticación
- * Simula llamadas a un backend con SharedPreferences
+ * Implementación del repositorio de autenticación con Firebase Authentication
  */
 class AuthRepositoryImpl(private val context: Context) : AuthRepository {
     
+    private val auth: FirebaseAuth = FirebaseAuth.getInstance()
     private val prefs: SharedPreferences = 
         context.getSharedPreferences("auth_prefs", Context.MODE_PRIVATE)
     
-    private val mockUsers = mutableMapOf(
-        "demo@anticrono.com" to Pair("Demo User", "123456"),
-        "test@test.com" to Pair("Test User", "password")
-    )
-    
     override suspend fun signIn(email: String, password: String): Result<User> {
-        // Simular delay de red
-        delay(1500)
-        
-        val userData = mockUsers[email]
-        return if (userData != null && userData.second == password) {
-            val user = User(
-                id = UUID.randomUUID().toString(),
-                email = email,
-                name = userData.first
-            )
-            // Guardar sesión
-            prefs.edit().apply {
-                putString("user_id", user.id)
-                putString("user_email", user.email)
-                putString("user_name", user.name)
-                putBoolean("is_authenticated", true)
-                apply()
+        return try {
+            val authResult = auth.signInWithEmailAndPassword(email, password).await()
+            val firebaseUser = authResult.user
+            
+            if (firebaseUser != null) {
+                val user = User(
+                    id = firebaseUser.uid,
+                    email = firebaseUser.email ?: email,
+                    name = firebaseUser.displayName ?: email.substringBefore('@')
+                )
+                
+                // Guardar sesión local
+                prefs.edit().apply {
+                    putString("user_id", user.id)
+                    putString("user_email", user.email)
+                    putString("user_name", user.name)
+                    putBoolean("is_authenticated", true)
+                    apply()
+                }
+                
+                Result.success(user)
+            } else {
+                Result.failure(Exception("Error al iniciar sesión"))
             }
-            Result.success(user)
-        } else {
+        } catch (e: FirebaseAuthInvalidUserException) {
+            Result.failure(Exception("Usuario no encontrado"))
+        } catch (e: FirebaseAuthInvalidCredentialsException) {
             Result.failure(Exception("Credenciales inválidas"))
+        } catch (e: Exception) {
+            Result.failure(Exception("Error de autenticación: ${e.message}"))
         }
     }
     
     override suspend fun register(name: String, email: String, password: String): Result<User> {
-        // Simular delay de red
-        delay(2000)
-        
-        return if (mockUsers.containsKey(email)) {
-            Result.failure(Exception("El email ya está registrado"))
-        } else {
-            // Registrar nuevo usuario
-            mockUsers[email] = Pair(name, password)
+        return try {
+            val authResult = auth.createUserWithEmailAndPassword(email, password).await()
+            val firebaseUser = authResult.user
             
-            val user = User(
-                id = UUID.randomUUID().toString(),
-                email = email,
-                name = name
-            )
-            
-            // Guardar sesión
-            prefs.edit().apply {
-                putString("user_id", user.id)
-                putString("user_email", user.email)
-                putString("user_name", user.name)
-                putBoolean("is_authenticated", true)
-                apply()
+            if (firebaseUser != null) {
+                // Actualizar el perfil del usuario con el nombre
+                val profileUpdates = com.google.firebase.auth.UserProfileChangeRequest.Builder()
+                    .setDisplayName(name)
+                    .build()
+                firebaseUser.updateProfile(profileUpdates).await()
+                
+                val user = User(
+                    id = firebaseUser.uid,
+                    email = firebaseUser.email ?: email,
+                    name = name
+                )
+                
+                // Guardar sesión local
+                prefs.edit().apply {
+                    putString("user_id", user.id)
+                    putString("user_email", user.email)
+                    putString("user_name", user.name)
+                    putBoolean("is_authenticated", true)
+                    apply()
+                }
+                
+                Result.success(user)
+            } else {
+                Result.failure(Exception("Error al registrar usuario"))
             }
-            
-            Result.success(user)
+        } catch (e: FirebaseAuthWeakPasswordException) {
+            Result.failure(Exception("Contraseña muy débil"))
+        } catch (e: FirebaseAuthUserCollisionException) {
+            Result.failure(Exception("El email ya está registrado"))
+        } catch (e: Exception) {
+            Result.failure(Exception("Error al registrar: ${e.message}"))
         }
     }
     
     override suspend fun signOut(): Result<Unit> {
-        prefs.edit().clear().apply()
-        return Result.success(Unit)
+        return try {
+            auth.signOut()
+            prefs.edit().clear().apply()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(Exception("Error al cerrar sesión: ${e.message}"))
+        }
     }
     
     override suspend fun getCurrentUser(): User? {
-        val isAuth = prefs.getBoolean("is_authenticated", false)
-        return if (isAuth) {
+        val firebaseUser = auth.currentUser
+        return if (firebaseUser != null) {
             User(
-                id = prefs.getString("user_id", "") ?: "",
-                email = prefs.getString("user_email", "") ?: "",
-                name = prefs.getString("user_name", "") ?: ""
+                id = firebaseUser.uid,
+                email = firebaseUser.email ?: "",
+                name = firebaseUser.displayName ?: firebaseUser.email?.substringBefore('@') ?: ""
             )
         } else {
-            null
+            // Fallback a SharedPreferences si hay sesión guardada
+            val isAuth = prefs.getBoolean("is_authenticated", false)
+            if (isAuth) {
+                User(
+                    id = prefs.getString("user_id", "") ?: "",
+                    email = prefs.getString("user_email", "") ?: "",
+                    name = prefs.getString("user_name", "") ?: ""
+                )
+            } else {
+                null
+            }
         }
     }
     
     override fun isUserAuthenticated(): Flow<Boolean> = flow {
-        emit(prefs.getBoolean("is_authenticated", false))
+        emit(auth.currentUser != null)
     }
 }
+

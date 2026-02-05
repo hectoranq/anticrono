@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "666864640783",
+    "project_id": "anticrono-b9431",
+    "storage_bucket": "anticrono-b9431.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:666864640783:android:34d56326d909b9375c147a",
+        "android_client_info": {
+          "package_name": "com.timedead.relojinverso"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBSOvzblUD6Svm54FGQBO1Lkj_XEwxR0UI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

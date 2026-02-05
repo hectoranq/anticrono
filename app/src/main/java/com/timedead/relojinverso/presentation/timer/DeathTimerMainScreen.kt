@@ -29,7 +29,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.animation.core.*
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.tooling.preview.Preview
 import com.timedead.relojinverso.R
+import com.timedead.relojinverso.ui.theme.RelojinversoTheme
 
 /**
  * Pantalla principal del Death Timer
@@ -261,4 +263,13 @@ private fun calculateTimeLeft(deathDateTime: LocalDateTime): TimeLeft {
     val seconds = 59 - (totalSeconds % 60)
     
     return TimeLeft(years, months, weeks, days, hours, minutes, seconds)
+}
+
+
+@Preview(showBackground = true)
+@Composable
+fun GreetingPreview() {
+    RelojinversoTheme {
+        DeathTimerMainScreen(onSignOut = {})
+    }
 }

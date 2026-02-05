@@ -1,22 +1,50 @@
 package com.timedead.relojinverso.presentation.auth
 
-import androidx.compose.foundation.Image
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.timedead.relojinverso.data.intent.AuthIntent
 import com.timedead.relojinverso.data.state.AuthState
+import com.timedead.relojinverso.ui.theme.RelojinversoTheme
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+
+/* ---------- COLORES ---------- */
+
+private val PrimaryRed = Color(0xFFB91C1C)
+private val AccentGreen = Color(0xFF22C55E)
+private val BackgroundDark = Color(0xFF050505)
+private val GoldText = Color(0xFFE6D6B8)
+
+/* ---------- STATE ---------- */
+
+data class LoginState(
+    val email: String = "demo@anticrono.com",
+    val password: String = "123456",
+    val darkMode: Boolean = true
+)
 
 /**
  * Pantalla de inicio de sesión
@@ -29,8 +57,7 @@ fun SignInScreen(
     onNavigateToHome: () -> Unit,
     onForgotPassword: () -> Unit
 ) {
-    var email by remember { mutableStateOf("demo@anticrono.com") }
-    var password by remember { mutableStateOf("123456") }
+    var loginState by remember { mutableStateOf(LoginState()) }
     var showError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
     
@@ -50,138 +77,81 @@ fun SignInScreen(
         }
     }
     
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        contentAlignment = Alignment.Center
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = if (loginState.darkMode) BackgroundDark else Color(0xFFF8FAFC)
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            // Logo o título
-            Text(
-                text = "⏳",
-                fontSize = 72.sp,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
+        Box {
             
-            Text(
-                text = "ANTICRONO",
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFFE6D6B8),
-                letterSpacing = 2.sp
-            )
+            BackgroundDecorations()
             
-            Text(
-                text = "Death Timer",
-                fontSize = 16.sp,
-                color = Color(0xFFE6D6B8).copy(alpha = 0.7f),
-                modifier = Modifier.padding(bottom = 48.dp)
-            )
-            
-            // Campo Email
-            OutlinedTextField(
-                value = email,
-                onValueChange = { email = it },
-                label = { Text("Email") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                singleLine = true
-            )
-            
-            // Campo Password
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                label = { Text("Contraseña") },
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp),
-                singleLine = true
-            )
-            
-            // Forgot Password
-            TextButton(
-                onClick = onForgotPassword,
-                modifier = Modifier.align(Alignment.End)
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
-                Text("¿Olvidaste tu contraseña?")
-            }
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            // Botón Sign In
-            Button(
-                onClick = {
-                    onIntent(AuthIntent.SignIn(email, password))
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                enabled = state !is AuthState.Loading
-            ) {
-                if (state is AuthState.Loading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = Color.White
-                    )
-                } else {
-                    Text("Iniciar Sesión", fontSize = 16.sp)
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // Botón Register
-            OutlinedButton(
-                onClick = onNavigateToRegister,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp)
-            ) {
-                Text("Crear cuenta", fontSize = 16.sp)
-            }
-            
-            // Mostrar error si existe
-            if (showError) {
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = errorMessage,
-                    color = MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
+                
+                LogoSection()
+                
+                Spacer(Modifier.height(32.dp))
+                
+                LoginForm(
+                    state = loginState,
+                    onEmailChange = { loginState = loginState.copy(email = it) },
+                    onPasswordChange = { loginState = loginState.copy(password = it) },
+                    onLogin = { onIntent(AuthIntent.SignIn(loginState.email, loginState.password)) },
+                    isLoading = state is AuthState.Loading
                 )
-            }
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            // Usuarios demo
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = Color(0xFF1A1A1A)
+                
+                Spacer(Modifier.height(24.dp))
+                
+                FooterActions(
+                    onForgotPassword = onForgotPassword,
+                    onCreateAccount = onNavigateToRegister
                 )
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
+                
+                // Mostrar error si existe
+                if (showError) {
+                    Spacer(Modifier.height(16.dp))
                     Text(
-                        text = "👤 Usuarios Demo:",
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 8.dp)
+                        text = errorMessage,
+                        color = PrimaryRed,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                        fontWeight = FontWeight.Bold
                     )
-                    Text("📧 demo@anticrono.com", fontSize = 12.sp)
-                    Text("🔑 123456", fontSize = 12.sp)
                 }
+                
+                Spacer(Modifier.height(24.dp))
+                
+                // Usuarios demo
+                DemoUsersCard()
             }
+            
+            ThemeToggle(
+                darkMode = loginState.darkMode,
+                onToggle = { loginState = loginState.copy(darkMode = !loginState.darkMode) }
+            )
         }
+    }
+}
+
+
+/* ---------- PREVIEW ---------- */
+
+@Preview(showBackground = true)
+@Composable
+fun LoginPreview() {
+    RelojinversoTheme {
+        SignInScreen(
+            authState = MutableStateFlow(AuthState.Idle),
+            onIntent = {},
+            onNavigateToRegister = {},
+            onForgotPassword = {},
+            onNavigateToHome = {}
+        )
     }
 }

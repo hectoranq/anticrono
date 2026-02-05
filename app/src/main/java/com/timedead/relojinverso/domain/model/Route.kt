@@ -10,8 +10,15 @@ sealed class Route(val route: String) {
     object Register : Route("register")
     object ForgotPassword : Route("forgot_password")
     
-    // Death Timer (Home Principal)
-    object DeathTimerHome : Route("death_timer_home")
+    // Navegación Principal (Bottom Navigation)
+    object Inicio : Route("inicio")
+    object Fin : Route("fin")
+    object Estadisticas : Route("estadisticas")
+    object Valor : Route("valor")
+    object Perfil : Route("perfil")
+    
+    // Death Timer (Home Principal - Alias de Inicio)
+    object DeathTimerHome : Route("inicio")
     
     // Configuración
     object Settings : Route("settings")
