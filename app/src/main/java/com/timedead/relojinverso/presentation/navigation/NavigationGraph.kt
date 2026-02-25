@@ -1,5 +1,10 @@
 package com.timedead.relojinverso.presentation.navigation
 
+import android.annotation.SuppressLint
+import android.app.usage.UsageStats
+import android.app.usage.UsageStatsManager
+import android.content.Context
+import android.util.Log
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -9,6 +14,7 @@ import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
@@ -35,18 +41,24 @@ import com.timedead.relojinverso.presentation.auth.SignInScreen
 import com.timedead.relojinverso.presentation.timer.DeathTimerMainScreen
 import com.timedead.relojinverso.presentation.timer.FinScreen
 import com.timedead.relojinverso.presentation.timer.EstadisticasScreen
+import com.timedead.relojinverso.presentation.timer.ScreenTimeScreen
 import com.timedead.relojinverso.presentation.timer.ValorScreen
 import com.timedead.relojinverso.presentation.timer.PerfilScreen
 import com.timedead.relojinverso.presentation.viewmodel.AuthViewModel
+import com.timedead.relojinverso.presentation.viewmodel.ProfileViewModel
 
 /**
  * Grafo de navegación principal de la aplicación
  * Implementa Navigation Compose con rutas type-safe y Bottom Navigation
  */
+
+
+@SuppressLint("ViewModelConstructorInComposable")
 @Composable
 fun NavigationGraph(
     navController: NavHostController = rememberNavController(),
-    authViewModel: AuthViewModel
+    authViewModel: AuthViewModel,
+    authRepository: com.timedead.relojinverso.domain.repository.AuthRepository
 ) {
     val context = LocalContext.current
     val authState by authViewModel.state.collectAsState()
@@ -108,18 +120,15 @@ fun NavigationGraph(
         
         // PANTALLAS PRINCIPALES CON BOTTOM NAVIGATION
         composable(Route.Inicio.route) {
+            val screenTime = remember { getScreenTime(context) }
             MainScreenWithBottomNav(
                 currentRoute = Route.Inicio.route,
                 navController = navController,
                 authViewModel = authViewModel
             ) {
                 DeathTimerMainScreen(
-                    onSignOut = {
-                        authViewModel.handleIntent(AuthIntent.SignOut)
-                        navController.navigate(Route.SignIn.route) {
-                            popUpTo(0) { inclusive = true }
-                        }
-                    }
+                    authRepository = authRepository,
+                    screenTimeMillis = screenTime
                 )
             }
         }
@@ -144,6 +153,16 @@ fun NavigationGraph(
             }
         }
         
+        composable(Route.ScreenTime.route) {
+            MainScreenWithBottomNav(
+                currentRoute = Route.ScreenTime.route,
+                navController = navController,
+                authViewModel = authViewModel
+            ) {
+                ScreenTimeScreen()
+            }
+        }
+        
         composable(Route.Valor.route) {
             MainScreenWithBottomNav(
                 currentRoute = Route.Valor.route,
@@ -160,7 +179,11 @@ fun NavigationGraph(
                 navController = navController,
                 authViewModel = authViewModel
             ) {
+                // Crear ViewModel de perfil
+                val profileViewModel = ProfileViewModel(authRepository)
+                
                 PerfilScreen(
+                    viewModel = profileViewModel,
                     onSignOut = {
                         authViewModel.handleIntent(AuthIntent.SignOut)
                         navController.navigate(Route.SignIn.route) {
@@ -227,20 +250,26 @@ private fun BottomNavigationBar(
             icon = Icons.Default.Home,
             label = "INICIO"
         ),
-        BottomNavItem(
-            route = Route.Fin.route,
-            iconDrawable = R.drawable.outline_skull_24,
-            label = "FIN"
-        ),
+
         BottomNavItem(
             route = Route.Estadisticas.route,
             iconDrawable = R.drawable.outline_bar_chart_4_bars_24,
             label = "ESTAS"
         ),
         BottomNavItem(
+            route = Route.ScreenTime.route,
+            iconDrawable = R.drawable.outline_mobile_24,
+            label = "TIEMPO"
+        ),
+        BottomNavItem(
             route = Route.Valor.route,
-            icon = Icons.Default.AccountCircle,
+            iconDrawable = R.drawable.outline_award_star_24,
             label = "VALOR"
+        ),
+        BottomNavItem(
+            route = Route.Fin.route,
+            iconDrawable = R.drawable.outline_skull_24,
+            label = "FIN"
         ),
         BottomNavItem(
             route = Route.Perfil.route,
@@ -300,3 +329,25 @@ private data class BottomNavItem(
     val iconDrawable: Int? = null,
     val label: String
 )
+
+/**
+ * Función para obtener el tiempo de pantalla de la aplicación
+ * usando UsageStatsManager
+ */
+private fun getScreenTime(context: Context): Long {
+    val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+    val endTime = System.currentTimeMillis()
+    val startTime = endTime - 1000L * 60 * 60 * 24 // Últimas 24 horas
+
+    val stats: List<UsageStats> = usageStatsManager.queryUsageStats(
+        UsageStatsManager.INTERVAL_DAILY,
+        startTime,
+        endTime
+    )
+
+    val screenTimeMillis = stats.firstOrNull { it.packageName == context.packageName }?.totalTimeInForeground ?: 0L
+
+    Log.d("WellbeingAPI", "Tiempo en pantalla (esta app): $screenTimeMillis ms")
+
+    return screenTimeMillis
+}

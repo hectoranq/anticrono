@@ -7,7 +7,9 @@ import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.FirebaseAuthWeakPasswordException
+import com.google.firebase.database.FirebaseDatabase
 import com.timedead.relojinverso.domain.model.User
+import com.timedead.relojinverso.domain.model.UserProfile
 import com.timedead.relojinverso.domain.repository.AuthRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -20,6 +22,7 @@ import java.util.UUID
 class AuthRepositoryImpl(private val context: Context) : AuthRepository {
     
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
+    private val database: FirebaseDatabase = FirebaseDatabase.getInstance()
     private val prefs: SharedPreferences = 
         context.getSharedPreferences("auth_prefs", Context.MODE_PRIVATE)
     
@@ -57,7 +60,7 @@ class AuthRepositoryImpl(private val context: Context) : AuthRepository {
         }
     }
     
-    override suspend fun register(name: String, email: String, password: String): Result<User> {
+    override suspend fun register(name: String, email: String, password: String, profile: UserProfile): Result<User> {
         return try {
             val authResult = auth.createUserWithEmailAndPassword(email, password).await()
             val firebaseUser = authResult.user
@@ -83,6 +86,9 @@ class AuthRepositoryImpl(private val context: Context) : AuthRepository {
                     putBoolean("is_authenticated", true)
                     apply()
                 }
+                
+                // Guardar perfil en Realtime Database
+                saveUserProfile(profile)
                 
                 Result.success(user)
             } else {
@@ -132,6 +138,43 @@ class AuthRepositoryImpl(private val context: Context) : AuthRepository {
     
     override fun isUserAuthenticated(): Flow<Boolean> = flow {
         emit(auth.currentUser != null)
+    }
+    
+    override suspend fun saveUserProfile(profile: UserProfile): Result<Unit> {
+        return try {
+            val uid = auth.currentUser?.uid
+                ?: return Result.failure(Exception("Usuario no autenticado"))
+            
+            database.getReference("users")
+                .child(uid)
+                .child("profile")
+                .setValue(profile)
+                .await()
+            
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(Exception("Error al guardar perfil: ${e.message}"))
+        }
+    }
+    
+    override suspend fun getUserProfile(): Result<UserProfile> {
+        return try {
+            val uid = auth.currentUser?.uid
+                ?: return Result.failure(Exception("Usuario no autenticado"))
+            
+            val snapshot = database.getReference("users")
+                .child(uid)
+                .child("profile")
+                .get()
+                .await()
+            
+            val profile = snapshot.getValue(UserProfile::class.java)
+                ?: return Result.failure(Exception("Perfil no encontrado"))
+            
+            Result.success(profile)
+        } catch (e: Exception) {
+            Result.failure(Exception("Error al obtener perfil: ${e.message}"))
+        }
     }
 }
 

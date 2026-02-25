@@ -14,6 +14,7 @@ sealed class Route(val route: String) {
     object Inicio : Route("inicio")
     object Fin : Route("fin")
     object Estadisticas : Route("estadisticas")
+    object ScreenTime : Route("screen_time")
     object Valor : Route("valor")
     object Perfil : Route("perfil")
     

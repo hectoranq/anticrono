@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.timedead.relojinverso.data.intent.AuthIntent
 import com.timedead.relojinverso.data.state.AuthState
+import com.timedead.relojinverso.domain.model.UserProfile
 import com.timedead.relojinverso.domain.repository.AuthRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,7 +29,7 @@ class AuthViewModel(
     fun handleIntent(intent: AuthIntent) {
         when (intent) {
             is AuthIntent.SignIn -> signIn(intent.email, intent.password)
-            is AuthIntent.Register -> register(intent.name, intent.email, intent.password)
+            is AuthIntent.Register -> register(intent.name, intent.email, intent.password, intent.profile)
             is AuthIntent.SignOut -> signOut()
             is AuthIntent.CheckAuthStatus -> checkAuthStatus()
         }
@@ -48,11 +49,11 @@ class AuthViewModel(
         }
     }
     
-    private fun register(name: String, email: String, password: String) {
+    private fun register(name: String, email: String, password: String, profile: UserProfile) {
         viewModelScope.launch {
             _state.value = AuthState.Loading
             
-            val result = authRepository.register(name, email, password)
+            val result = authRepository.register(name, email, password, profile)
             
             _state.value = if (result.isSuccess) {
                 AuthState.Success(result.getOrThrow())

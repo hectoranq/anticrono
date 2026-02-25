@@ -127,8 +127,7 @@ fun SignInScreen(
                 
                 Spacer(Modifier.height(24.dp))
                 
-                // Usuarios demo
-                DemoUsersCard()
+
             }
             
             ThemeToggle(

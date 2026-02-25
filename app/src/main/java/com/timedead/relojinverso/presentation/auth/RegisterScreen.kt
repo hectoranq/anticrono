@@ -5,6 +5,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.DateRange
@@ -23,11 +24,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.timedead.relojinverso.data.intent.AuthIntent
 import com.timedead.relojinverso.data.state.AuthState
+import com.timedead.relojinverso.domain.model.UserProfile
 import com.timedead.relojinverso.ui.theme.RelojinversoTheme
+import com.timedead.relojinverso.presentation.timer.jsonLifeExpectancyList
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 /* ---------- COLORES ---------- */
 
@@ -35,6 +42,19 @@ private val Primary = Color(0xFF22C55E)
 private val Danger = Color(0xFFDC2626)
 private val BackgroundDark = Color(0xFF0A0A0A)
 private val GoldText = Color(0xFFE6D6B8)
+
+/* ---------- DATA MODELS ---------- */
+
+data class CountryLifeExpectancy(
+    val Rank: Int,
+    val Country: String,
+    @com.google.gson.annotations.SerializedName("Life Expectancy (both sexes)")
+    val lifeExpectancy: Double,
+    @com.google.gson.annotations.SerializedName("Females Life Expectancy")
+    val femalesLifeExpectancy: Double,
+    @com.google.gson.annotations.SerializedName("Males Life Expectancy")
+    val malesLifeExpectancy: Double
+)
 
 /* ---------- STATE ---------- */
 
@@ -114,7 +134,26 @@ fun RegisterScreen(
                     }
                     else -> {
                         showError = false
-                        onIntent(AuthIntent.Register(formState.name, formState.email, formState.password))
+                        
+                        // Crear UserProfile con los datos del formulario
+                        val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+                        val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+                        
+                        val profile = UserProfile(
+                            fullName = formState.name,
+                            birthDate = formState.birthDate.format(dateFormatter),
+                            birthCountry = formState.country,
+                            sleepHours = formState.sleepHours.toInt(),
+                            tprStart = formState.startTime.format(timeFormatter),
+                            tprEnd = formState.endTime.format(timeFormatter)
+                        )
+                        
+                        onIntent(AuthIntent.Register(
+                            name = formState.name,
+                            email = formState.email,
+                            password = formState.password,
+                            profile = profile
+                        ))
                     }
                 }
             }
@@ -195,7 +234,10 @@ fun RegisterScreen(
             
             Spacer(Modifier.height(16.dp))
             
-            BirthDateField(formState.birthDate)
+            BirthDateField(
+                date = formState.birthDate,
+                onDateChange = { formState = formState.copy(birthDate = it) }
+            )
             
             Spacer(Modifier.height(20.dp))
             
@@ -318,8 +360,14 @@ private fun StyledTextField(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun BirthDateField(date: LocalDate) {
+private fun BirthDateField(
+    date: LocalDate,
+    onDateChange: (LocalDate) -> Unit
+) {
+    var showDatePicker by remember { mutableStateOf(false) }
+    
     Column {
         FieldLabel("Fecha de nacimiento")
         OutlinedTextField(
@@ -329,15 +377,71 @@ private fun BirthDateField(date: LocalDate) {
             trailingIcon = {
                 Icon(Icons.Default.DateRange, null, tint = Primary)
             },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { showDatePicker = true },
             shape = RoundedCornerShape(20.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Primary,
                 unfocusedBorderColor = Color.Gray,
                 focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White
-            )
+                unfocusedTextColor = Color.White,
+                disabledTextColor = Color.White,
+                disabledBorderColor = Color.Gray
+            ),
+            enabled = false
         )
+    }
+    
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        )
+        
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            val selectedDate = java.time.Instant.ofEpochMilli(millis)
+                                .atZone(ZoneId.systemDefault())
+                                .toLocalDate()
+                            onDateChange(selectedDate)
+                        }
+                        showDatePicker = false
+                    }
+                ) {
+                    Text("Aceptar", color = Primary)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("Cancelar", color = Color.Gray)
+                }
+            },
+            colors = DatePickerDefaults.colors(
+                containerColor = BackgroundDark
+            )
+        ) {
+            DatePicker(
+                state = datePickerState,
+                colors = DatePickerDefaults.colors(
+                    containerColor = BackgroundDark,
+                    titleContentColor = GoldText,
+                    headlineContentColor = GoldText,
+                    weekdayContentColor = Color.Gray,
+                    subheadContentColor = GoldText,
+                    yearContentColor = GoldText,
+                    currentYearContentColor = Primary,
+                    selectedYearContainerColor = Primary,
+                    selectedDayContainerColor = Primary,
+                    todayContentColor = Primary,
+                    todayDateBorderColor = Primary,
+                    dayContentColor = Color.White
+                )
+            )
+        }
     }
 }
 
@@ -347,8 +451,26 @@ private fun CountrySelector(
     value: String,
     onSelect: (String) -> Unit
 ) {
-    val countries = listOf("España", "México", "Argentina", "Colombia", "Chile", "Perú", "Venezuela", "Ecuador", "Uruguay", "Paraguay")
+    val countries = remember {
+        try {
+            val gson = Gson()
+            val type = object : TypeToken<List<CountryLifeExpectancy>>() {}.type
+            val countryList: List<CountryLifeExpectancy> = gson.fromJson(jsonLifeExpectancyList, type)
+            countryList.map { it.Country }.sorted()
+        } catch (e: Exception) {
+            listOf("España", "México", "Argentina", "Colombia", "Chile", "Perú", "Venezuela", "Ecuador", "Uruguay", "Paraguay", "Bolivia", "Costa Rica", "Cuba", "República Dominicana", "El Salvador", "Guatemala", "Honduras", "Nicaragua", "Panamá", "Puerto Rico")
+        }
+    }
     var expanded by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf(value) }
+    
+    val filteredCountries = remember(searchQuery) {
+        if (searchQuery.isEmpty()) {
+            countries
+        } else {
+            countries.filter { it.contains(searchQuery, ignoreCase = true) }
+        }
+    }
     
     Column {
         FieldLabel("País de nacimiento")
@@ -358,15 +480,18 @@ private fun CountrySelector(
             onExpandedChange = { expanded = !expanded }
         ) {
             OutlinedTextField(
-                value = value,
-                onValueChange = {},
-                readOnly = true,
-                placeholder = { Text("Selecciona tu país", color = Color.Gray) },
+                value = searchQuery,
+                onValueChange = { 
+                    searchQuery = it
+                    expanded = true
+                },
+                placeholder = { Text("Escribe para buscar tu país", color = Color.Gray) },
                 trailingIcon = {
-                    Icon(Icons.Default.Search, null, tint = Primary)
+                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
                 },
                 modifier = Modifier
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .menuAnchor(),
                 shape = RoundedCornerShape(20.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = Primary,
@@ -377,14 +502,15 @@ private fun CountrySelector(
             )
             
             ExposedDropdownMenu(
-                expanded = expanded,
+                expanded = expanded && filteredCountries.isNotEmpty(),
                 onDismissRequest = { expanded = false }
             ) {
-                countries.forEach {
+                filteredCountries.forEach { country ->
                     DropdownMenuItem(
-                        text = { Text(it) },
+                        text = { Text(country) },
                         onClick = {
-                            onSelect(it)
+                            onSelect(country)
+                            searchQuery = country
                             expanded = false
                         }
                     )
@@ -451,8 +577,8 @@ private fun ProductivityTimeSection(
         Spacer(Modifier.height(12.dp))
         
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TimeField("Hora inicial", start)
-            TimeField("Hora final", end)
+            TimeField("Hora inicial", start, onStartChange)
+            TimeField("Hora final", end, onEndChange)
         }
         
         Spacer(Modifier.height(8.dp))
@@ -467,8 +593,15 @@ private fun ProductivityTimeSection(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun RowScope.TimeField(label: String, time: LocalTime) {
+private fun RowScope.TimeField(
+    label: String, 
+    time: LocalTime,
+    onTimeChange: (LocalTime) -> Unit
+) {
+    var showTimePicker by remember { mutableStateOf(false) }
+    
     Column(modifier = Modifier.weight(1f)) {
         Text(
             label.uppercase(),
@@ -478,17 +611,73 @@ private fun RowScope.TimeField(label: String, time: LocalTime) {
         )
         Spacer(Modifier.height(8.dp))
         OutlinedTextField(
-            value = time.toString(),
+            value = String.format("%02d:%02d", time.hour, time.minute),
             onValueChange = {},
             readOnly = true,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { showTimePicker = true },
             shape = RoundedCornerShape(20.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Primary,
                 unfocusedBorderColor = Color.Gray,
                 focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White
-            )
+                unfocusedTextColor = Color.White,
+                disabledTextColor = Color.White,
+                disabledBorderColor = Color.Gray
+            ),
+            enabled = false
+        )
+    }
+    
+    if (showTimePicker) {
+        val timePickerState = rememberTimePickerState(
+            initialHour = time.hour,
+            initialMinute = time.minute,
+            is24Hour = true
+        )
+        
+        AlertDialog(
+            onDismissRequest = { showTimePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val selectedTime = LocalTime.of(
+                            timePickerState.hour,
+                            timePickerState.minute
+                        )
+                        onTimeChange(selectedTime)
+                        showTimePicker = false
+                    }
+                ) {
+                    Text("Aceptar", color = Primary)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTimePicker = false }) {
+                    Text("Cancelar", color = Color.Gray)
+                }
+            },
+            containerColor = BackgroundDark,
+            text = {
+                TimePicker(
+                    state = timePickerState,
+                    colors = TimePickerDefaults.colors(
+                        clockDialColor = BackgroundDark,
+                        selectorColor = Primary,
+                        containerColor = BackgroundDark,
+                        periodSelectorBorderColor = Primary,
+                        clockDialSelectedContentColor = Color.White,
+                        clockDialUnselectedContentColor = Color.Gray,
+                        periodSelectorSelectedContainerColor = Primary,
+                        periodSelectorUnselectedContainerColor = Color.Gray,
+                        timeSelectorSelectedContainerColor = Primary,
+                        timeSelectorUnselectedContainerColor = Color.Gray.copy(alpha = 0.3f),
+                        timeSelectorSelectedContentColor = Color.White,
+                        timeSelectorUnselectedContentColor = Color.White
+                    )
+                )
+            }
         )
     }
 }

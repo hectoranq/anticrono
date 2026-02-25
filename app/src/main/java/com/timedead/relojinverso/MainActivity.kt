@@ -53,7 +53,8 @@ class MainActivity : ComponentActivity() {
                     val navController = rememberNavController()
                     NavigationGraph(
                         navController = navController,
-                        authViewModel = authViewModel
+                        authViewModel = authViewModel,
+                        authRepository = authRepository
                     )
                 }
             }
